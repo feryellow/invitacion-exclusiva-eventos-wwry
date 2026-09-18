@@ -178,6 +178,9 @@ footer p { margin:14px 0 0; color:var(--muted); font-size:.82rem; line-height:1.
 .aforo-bar-inner { flex:1; height:4px; background:#222; border-radius:2px; }
 .aforo-bar-fill { height:100%; border-radius:2px; background:var(--gold); transition:width .4s; }
 @media (max-width:540px) { .shell { width:100%; } header { padding:26px 18px 0; } main { padding:30px 24px 42px; } .booking { padding:22px 18px; } }
+.hidden { display:none !important; }
+.form-error { margin:12px 0 0; padding:12px 14px; border:1px solid #7a2f2f; background:#3a1414; color:#ffb5b5; font-size:.85rem; line-height:1.5; }
+button[disabled] { opacity:.6; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -243,7 +246,8 @@ footer p { margin:14px 0 0; color:var(--muted); font-size:.82rem; line-height:1.
 <textarea id="evento" name="evento_anterior" rows="3"></textarea>
 </div>
 <label class="check"><input type="checkbox" name="privacidad_leida" required> <span>He leído la <a href="https://laestacion.com/politica-de-privacidad/" target="_blank">Política de privacidad</a> y entiendo que mis datos se tratarán para gestionar esta solicitud de invitación.</span></label>
-<button type="submit">Enviar solicitud</button>
+<p id="form-error" class="form-error hidden" role="alert"></p>
+<button type="submit" id="submit-btn">Enviar solicitud</button>
 </form>
 </section>
 </main>
@@ -289,6 +293,59 @@ select.addEventListener('change', () => {
       });
     })
     .catch(() => { /* si falla, no se bloquea el formulario */ });
+})();
+
+(function () {
+  const form = document.querySelector('form[name="reserva-wwry"]');
+  if (!form) return;
+  const errorBox = document.querySelector('#form-error');
+  const submitBtn = document.querySelector('#submit-btn');
+  const emailInput = document.querySelector('#email');
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.remove('hidden');
+  }
+  function hideError() {
+    errorBox.classList.add('hidden');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+    const email = (emailInput.value || '').trim().toLowerCase();
+    submitBtn.disabled = true;
+    try {
+      const check = await fetch('/.netlify/functions/validar-invitado', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const result = await check.json().catch(() => ({ valid: false }));
+
+      if (!result.valid) {
+        showError('Este correo no aparece en nuestra lista de invitados a este evento. Si crees que es un error, escríbenos a eventos@laestacion.com.');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      const formData = new FormData(form);
+      const encoded = new URLSearchParams();
+      for (const pair of formData.entries()) encoded.append(pair[0], pair[1]);
+
+      const submitResp = await fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: encoded.toString()
+      });
+
+      if (!submitResp.ok) throw new Error('submit failed');
+      window.location.href = '/gracias/';
+    } catch (err) {
+      showError('Ha habido un problema enviando tu solicitud. Inténtalo de nuevo en unos segundos.');
+      submitBtn.disabled = false;
+    }
+  });
 })();
 </script>
 <!-- deploy-2026-09-17 -->
