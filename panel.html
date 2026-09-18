@@ -18,6 +18,13 @@
     .tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px}.meta{color:#aaa69d;font-size:13px}
     .table-wrap{overflow:auto;border:1px solid #292a2c} table{width:100%;border-collapse:collapse;min-width:920px} th,td{padding:11px 12px;border-bottom:1px solid #242527;text-align:left;font-size:13px;vertical-align:top} th{position:sticky;top:0;background:#121416;color:#f3d47c} tr:hover td{background:#0e1012}
     .error{color:#ffb5b5;margin-top:14px}.hidden{display:none!important}
+    .report{margin-bottom:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+    .report .card{border:1px solid rgba(215,173,85,.3);background:#0a0b0d;padding:14px 16px}
+    .report .card h3{margin:0 0 6px;font-size:14px;color:#f3d47c;font-weight:700}
+    .report .card .count{font-size:22px;font-weight:800;margin-bottom:6px}
+    .report .card .count.full{color:#ff8a8a}
+    .report .card .names{font-size:12px;color:#c8c3b8;line-height:1.5;max-height:110px;overflow:auto}
+    .del{background:#3a1414;border-color:#7a2f2f;color:#ffb5b5;min-height:32px;padding:4px 10px;font-weight:700}
     @media(max-width:600px){.row{display:block}.row button{width:100%;margin-top:10px}.wrap{width:min(100% - 20px,1180px)}}
   </style>
 </head>
@@ -33,13 +40,39 @@
 
   <section id="panel" class="panel hidden">
     <div class="tools"><div id="summary" class="meta">Cargando…</div><div><button id="refresh" type="button">Actualizar</button> <button id="csv" type="button">Descargar CSV</button></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha solicitud</th><th>Función</th><th>Entradas</th><th>Nombre</th><th>Email</th><th>Empresa</th><th>Trabajó antes</th><th>Proyecto</th></tr></thead><tbody id="rows"></tbody></table></div>
+
+    <div id="report" class="report"></div>
+
+    <div class="table-wrap"><table><thead><tr><th>Fecha solicitud</th><th>Función</th><th>Entradas</th><th>Nombre</th><th>Email</th><th>Empresa</th><th>Trabajó antes</th><th>Proyecto</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
     <div id="panel-error" class="error hidden"></div>
   </section>
 </div>
 <script>
-  const $=s=>document.querySelector(s); let current=[]; let pass='';
+  const $=s=>document.querySelector(s); let current=[]; let pass=''; const CUPO=30;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function renderReport(){
+    const porFuncion={};
+    current.forEach(x=>{
+      const f=x.funcion||'(sin función)';
+      const n=parseInt(x.invitaciones,10)||0;
+      if(!porFuncion[f]) porFuncion[f]={total:0,nombres:[]};
+      porFuncion[f].total+=n;
+      porFuncion[f].nombres.push(`${x.nombre||'(sin nombre)'} · ${n} ${n===1?'entrada':'entradas'}`);
+    });
+    const funciones=Object.keys(porFuncion).sort();
+    $('#report').innerHTML=funciones.map(f=>{
+      const d=porFuncion[f];
+      const full=d.total>=CUPO;
+      return `<div class="card"><h3>${esc(f)}</h3><div class="count${full?' full':''}">${d.total} / ${CUPO}${full?' · COMPLETO':''}</div><div class="names">${d.nombres.map(esc).join('<br>')}</div></div>`;
+    }).join('')||'<div class="meta">Todavía no hay solicitudes.</div>';
+  }
+  async function borrar(id){
+    if(!confirm('¿Borrar esta solicitud? No se puede deshacer.')) return;
+    const r=await fetch('/.netlify/functions/panel-delete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pass,id})});
+    const data=await r.json().catch(()=>({error:'Respuesta inválida del servidor'}));
+    if(!r.ok){ $('#panel-error').textContent=data.error||'No se pudo borrar'; $('#panel-error').classList.remove('hidden'); return; }
+    await load();
+  }
   async function load(){
     $('#panel-error').classList.add('hidden');
     const r=await fetch('/.netlify/functions/panel-data',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pass})});
@@ -47,7 +80,9 @@
     if(!r.ok) throw new Error(data.error||'No se pudo cargar el panel');
     current=data.submissions||[];
     $('#summary').textContent=`${current.length} solicitudes verificadas · formulario ${data.formName||'reserva-wwry'}`;
-    $('#rows').innerHTML=current.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.funcion)}</td><td>${esc(x.invitaciones)}</td><td>${esc(x.nombre)}</td><td>${esc(x.email)}</td><td>${esc(x.empresa)}</td><td>${esc(x.ha_trabajado_antes)}</td><td>${esc(x.evento_anterior)}</td></tr>`).join('');
+    renderReport();
+    $('#rows').innerHTML=current.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.funcion)}</td><td>${esc(x.invitaciones)}</td><td>${esc(x.nombre)}</td><td>${esc(x.email)}</td><td>${esc(x.empresa)}</td><td>${esc(x.ha_trabajado_antes)}</td><td>${esc(x.evento_anterior)}</td><td><button class="del" type="button" data-id="${esc(x.id)}">Borrar</button></td></tr>`).join('');
+    $('#rows').querySelectorAll('.del').forEach(btn=>btn.addEventListener('click',()=>borrar(btn.dataset.id)));
   }
   async function enter(){
     pass=$('#password').value;

@@ -267,6 +267,29 @@ select.addEventListener('change', () => {
   conditional.classList.toggle('is-visible', show);
   eventField.required = show;
 });
+
+(function () {
+  const funcionSelect = document.querySelector('#funcion');
+  if (!funcionSelect) return;
+  fetch('/.netlify/functions/aforo', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !data.aforo) return;
+      const cupo = data.cupo || 30;
+      Array.from(funcionSelect.options).forEach(opt => {
+        if (!opt.value) return;
+        const ocupadas = data.aforo[opt.value] || 0;
+        if (ocupadas >= cupo) {
+          opt.disabled = true;
+          if (!/\(Completo\)$/.test(opt.textContent)) {
+            opt.textContent = opt.textContent + ' (Completo)';
+          }
+          if (funcionSelect.value === opt.value) funcionSelect.value = '';
+        }
+      });
+    })
+    .catch(() => { /* si falla, no se bloquea el formulario */ });
+})();
 </script>
 <!-- deploy-2026-09-17 -->
 </body>
