@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Panel · Invitaciones We Will Rock You</title>
+  <style>
+    *{box-sizing:border-box} html,body{margin:0;background:#050607;color:#f6f2e9;font-family:Arial,Helvetica,sans-serif} body{min-width:320px}
+    .wrap{width:min(100% - 28px,1180px);margin:0 auto;padding:28px 0 60px}
+    header{display:flex;gap:18px;align-items:center;justify-content:space-between;padding:18px 0 24px;border-bottom:1px solid rgba(215,173,85,.28)}
+    h1{margin:0;color:#ffe3a0;font-family:Georgia,'Times New Roman',serif;font-size:clamp(25px,4vw,38px);font-weight:400}
+    .login,.panel{margin-top:28px;border:1px solid rgba(215,173,85,.42);background:#0a0b0d;padding:24px}
+    .login{max-width:480px;margin-left:auto;margin-right:auto}
+    label{display:block;margin:0 0 8px;font-weight:700}.row{display:flex;gap:10px}.row input{flex:1}
+    input,button{min-height:46px;padding:11px 13px;border:1px solid #5b564a;background:#101214;color:#fff;font:inherit}
+    button{cursor:pointer;background:linear-gradient(180deg,#efcc73,#c29435);color:#15110a;border-color:#ffe3a0;font-weight:800}
+    .tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px}.meta{color:#aaa69d;font-size:13px}
+    .table-wrap{overflow:auto;border:1px solid #292a2c} table{width:100%;border-collapse:collapse;min-width:920px} th,td{padding:11px 12px;border-bottom:1px solid #242527;text-align:left;font-size:13px;vertical-align:top} th{position:sticky;top:0;background:#121416;color:#f3d47c} tr:hover td{background:#0e1012}
+    .error{color:#ffb5b5;margin-top:14px}.hidden{display:none!important}
+    @media(max-width:600px){.row{display:block}.row button{width:100%;margin-top:10px}.wrap{width:min(100% - 20px,1180px)}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Panel de invitaciones</h1><div class="meta">We Will Rock You · Eventos</div></header>
+
+  <section id="login" class="login">
+    <label for="password">Contraseña del panel</label>
+    <div class="row"><input id="password" type="password" autocomplete="current-password"><button id="enter" type="button">Entrar</button></div>
+    <div id="login-error" class="error hidden"></div>
+  </section>
+
+  <section id="panel" class="panel hidden">
+    <div class="tools"><div id="summary" class="meta">Cargando…</div><div><button id="refresh" type="button">Actualizar</button> <button id="csv" type="button">Descargar CSV</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha solicitud</th><th>Función</th><th>Entradas</th><th>Nombre</th><th>Email</th><th>Empresa</th><th>Trabajó antes</th><th>Proyecto</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div id="panel-error" class="error hidden"></div>
+  </section>
+</div>
+<script>
+  const $=s=>document.querySelector(s); let current=[]; let pass='';
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function load(){
+    $('#panel-error').classList.add('hidden');
+    const r=await fetch('/.netlify/functions/panel-data',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pass})});
+    const data=await r.json().catch(()=>({error:'Respuesta inválida del servidor'}));
+    if(!r.ok) throw new Error(data.error||'No se pudo cargar el panel');
+    current=data.submissions||[];
+    $('#summary').textContent=`${current.length} solicitudes verificadas · formulario ${data.formName||'reserva-wwry'}`;
+    $('#rows').innerHTML=current.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.funcion)}</td><td>${esc(x.invitaciones)}</td><td>${esc(x.nombre)}</td><td>${esc(x.email)}</td><td>${esc(x.empresa)}</td><td>${esc(x.ha_trabajado_antes)}</td><td>${esc(x.evento_anterior)}</td></tr>`).join('');
+  }
+  async function enter(){
+    pass=$('#password').value;
+    $('#login-error').classList.add('hidden');
+    try{await load();$('#login').classList.add('hidden');$('#panel').classList.remove('hidden')}catch(e){$('#login-error').textContent=e.message;$('#login-error').classList.remove('hidden')}
+  }
+  $('#enter').addEventListener('click',enter); $('#password').addEventListener('keydown',e=>{if(e.key==='Enter') enter()});
+  $('#refresh').addEventListener('click',()=>load().catch(e=>{ $('#panel-error').textContent=e.message;$('#panel-error').classList.remove('hidden') }));
+  $('#csv').addEventListener('click',()=>{
+    const cols=['created_at','funcion','invitaciones','nombre','email','empresa','ha_trabajado_antes','evento_anterior'];
+    const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+    const csv=[cols.join(','),...current.map(x=>cols.map(k=>q(x[k])).join(','))].join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='solicitudes-wwry.csv';a.click();URL.revokeObjectURL(a.href);
+  });
+</script>
+</body>
+</html>
